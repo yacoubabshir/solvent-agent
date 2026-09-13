@@ -347,7 +347,9 @@ class StageRunner:
             "simulated": checkout.get("simulated", False),
             "job_id": job_id,
         }
-        if self.sync_payment:
+        # Simulated checkouts (no live Stripe key) can never receive a webhook,
+        # so confirm them instantly in async mode too, matching confirm_payment().
+        if self.sync_payment or not self.stripe.live or link.get("simulated"):
             payment = self.stripe.confirm_payment(link, job_id=job_id)
         else:
             payment = self.stripe.get_cached_payment(job_id) or {

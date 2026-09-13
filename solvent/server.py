@@ -97,13 +97,20 @@ def create_app(seed_cents: int = 10_000, fresh: bool = False) -> object:
             last_status_json = payload
         hub.publish("status", {"data": data})
 
-    def _on_agent_event(event: dict) -> None:
-        agent._capture_event(event)
+    def _publish_agent_event(event: dict) -> None:
         data = _refresh_status()
         hub.publish("agent_event", {"event": event, "data": data})
 
-    agent._runner.on_event = _on_agent_event
-    agent.on_event = _on_agent_event
+    def _on_runner_event(event: dict) -> None:
+        # Runner events are not yet in the agent log; record them, then publish.
+        # (Calling agent._capture_event here would re-enter agent.on_event below
+        # and recurse forever.)
+        agent.log.append(event)
+        _publish_agent_event(event)
+
+    agent._runner.on_event = _on_runner_event
+    # agent._emit() already appends to agent.log before calling on_event.
+    agent.on_event = _publish_agent_event
 
     def _dashboard_outbound(external_id: str, text: str) -> None:
         hub.publish(
